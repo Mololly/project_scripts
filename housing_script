@@ -1,0 +1,143 @@
+create table nashville(
+	uniqueID varchar(10) primary key,
+	ParcelID varchar(30),
+	LandUse varchar(50),
+	PropertyAddress varchar (50),
+	SaleDate date,
+	SalePrice varchar(20),
+	LegalReference varchar(50),
+	SoldAsVacant varchar(10),
+	OwnerName varchar(100),
+	OwnerAddress varchar(150),
+	Acreage numeric,
+	TaxDistrict varchar(100),
+	LandValue numeric,
+	BuildingValue numeric,
+	TotalValue numeric,
+	YearBuilt varchar(5),
+	Bedrooms numeric,
+	FullBath numeric,
+	HalfBath numeric
+)
+
+-- quick glance at data
+select * from nashville
+
+--check if property address column has null values
+select propertyaddress from nashville
+where propertyaddress is null
+
+-- populate the proprty address column
+-- first we perform a self join 
+-- The same property address will be used for rows with same parcel id but different unique ids
+select nash_a.propertyaddress, nash_b.propertyaddress, nash_a.parcelid,nash_b.parcelid, nash_a.uniqueid,nash_b.uniqueid from nashville nash_a
+join nashville nash_b
+on nash_a.parcelid=nash_b.parcelid
+and nash_a.uniqueid!=nash_b.uniqueid
+where nash_a.propertyaddress is null
+
+--use update join and coalesce functions to update property address columns with null values
+
+update nashville nash_a
+set propertyaddress=coalesce(nash_a.propertyaddress,nash_b.propertyaddress)
+from nashville nash_b
+where nash_a.parcelid=nash_b.parcelid
+and nash_a.uniqueid!=nash_b.uniqueid
+and nash_a.propertyaddress is null
+
+-- run query to confirm. No rows should be displayed
+select * from nashville 
+where propertyaddress is null
+
+
+-- Break the property address into address,city and state
+select 
+substring(propertyaddress,1,position(',' in propertyaddress)-1 ) street,
+substring(propertyaddress,position(',' in propertyaddress)+2, length(propertyaddress) ) city
+from nashville
+
+--Add two new columns to the table for the seperated adrresses
+alter table nashville
+add splitstreetaddress varchar(100),
+add splitcityaddress varchar(100)
+
+-- update the new columns with the seperated addresses
+update nashville
+set splitstreetaddress=substring(propertyaddress,1,position(',' in propertyaddress)-1 ),
+	splitcityaddress=substring(propertyaddress,position(',' in propertyaddress)+2, length(propertyaddress) )
+
+-- run query to confirm
+select * from nashville
+
+
+---Seperate owner address in a similar way
+select owneraddress from nashville
+
+
+-- this time, the split part function is used to seperate the substring
+--the trim function is used to trim the second and third substring
+select 
+	split_part(owneraddress,',',1) street,
+	trim(split_part(owneraddress,',',2)) city,
+	trim(split_part(owneraddress,',',3)) state
+from nashville
+
+-- extra columns are added to table and populated with the substrings
+
+alter table nashville
+add column ownerstreet varchar(60),
+add column ownercity varchar(60),
+add column ownerstate varchar(60)
+
+-- run update to populate newly created columns
+update nashville 
+set ownerstreet=split_part(owneraddress,',',1),
+	ownercity=trim(split_part(owneraddress,',',2)),
+	ownerstate=trim(split_part(owneraddress,',',3))
+
+
+-- run query to verify
+select * from nashville
+
+--filter the soldasvacant column
+--let's change values 'y' to yes and 'n' to no using case statement
+select distinct(soldasvacant), count(soldasvacant)
+from nashville
+group by soldasvacant;
+
+select soldasvacant,
+	case 
+		when soldasvacant='Y' then 'Yes'
+		when soldasvacant='N' then 'No'
+		else soldasvacant	
+	end
+from nashville
+
+-- Now let's update the column
+update nashville
+set soldasvacant=case 
+					when soldasvacant='Y' then 'Yes'
+					when soldasvacant='N' then 'No'
+					else soldasvacant	
+				 end
+-- Remove duplicate records using CTE
+with rownumber as
+(
+	select * , row_number() over(
+		partition by parcelid,
+					 propertyaddress,
+					 saledate,
+					 saleprice,
+					 legalreference
+					 order by
+					 uniqueid) as rownum
+	from nashville
+)	
+delete from rownumber
+where rownum>1
+	
+
+-- remove the propertyaddress and owneraddress columns 
+alter table nashville
+drop column propertyaddress, 
+drop column owneraddress
