@@ -1,0 +1,165 @@
+--lets show countries with highest death rates
+-- remove rows with null values
+select location,max(total_deaths) as highestdeaths
+from covid_death
+where total_deaths is not null
+group by location
+order by highestdeaths desc
+
+
+select * from covid_death
+
+
+-- a look at the data shows when continent is a null value, continent replaces location and may be misleading
+-- eliminate rows with null values for continent
+select * from covid_death
+where continent is not null
+
+select location,max(total_deaths) as highestdeaths
+from covid_death
+where continent is not null and total_deaths is not null
+group by location
+order by highestdeaths desc
+
+
+-- filtering by continent
+select continent, max(total_deaths) as highestdeaths
+from covid_death
+where continent is not null and total_deaths is not null
+group by continent
+order by highestdeaths desc
+
+--create view of above query
+
+create view deathbycontinent as 
+select continent, max(total_deaths) as highestdeaths
+from covid_death
+where continent is not null and total_deaths is not null
+group by continent
+order by highestdeaths desc
+
+
+
+
+--filtering global numbers of death perecentages grouping by date
+-- filter out new cases=0 to avoid division by zero error
+select date, sum(new_cases)as global_new_cases, sum(new_deaths)as global_new_deaths, sum(new_deaths)/sum(new_cases)*100 as globalpercentage
+from covid_death
+where new_cases!=0
+group by date
+order by globalpercentage desc
+
+
+--filtering total global numbers of death perecentages for the data set
+select sum(new_cases)as global_new_cases, sum(new_deaths)as global_new_deaths, sum(new_deaths)/sum(new_cases)*100 as globalpercentage
+from covid_death
+where new_cases!=0
+order by globalpercentage desc
+
+--EDA of covid vaccination table
+select * from covid_vaccinations
+
+
+-- Join the two tables
+select dea.continent, vac.location, vac.date, population,new_vaccinations from covid_vaccinations as vac
+join covid_death as dea
+on vac.location=dea.location
+and cast(dea.date as character)=cast(vac.date as character)
+where dea.continent is not null
+order by 1,2
+
+
+--create a rolling sum of the number of vaccinations by location
+select vac.continent, vac.location, dea.date, population,new_vaccinations, sum(new_vaccinations)
+over (partition by dea.location order by dea.location,dea.date)as rollingpersonvaccinated
+from covid_vaccinations as vac
+join covid_death as dea
+on vac.location=dea.location
+and cast(vac.date as date)=cast(dea.date as date)
+where dea.continent is not null
+order by 2,3
+
+
+-- determine the percentage of population vaccinated
+-- use cte 
+with vacvspop (continent, location, date, population,new_vaccinations,rollingpersonvaccinated)
+as
+(
+select vac.continent, vac.location, dea.date, population,new_vaccinations, sum(new_vaccinations)
+over (partition by dea.location order by dea.location,dea.date)as rollingpersonvaccinated
+from covid_vaccinations as vac
+join covid_death as dea
+on vac.location=dea.location
+and cast(vac.date as date)=cast(dea.date as date)
+where dea.continent is not null
+
+)
+select *, rollingpersonvaccinated/population*100 as pop_percentage_vac
+from vacvspop
+
+
+
+
+--continent with highest number of fully vaccinated people
+
+select continent, sum(people_fully_vaccinated)as total_vaccinated
+from covid_vaccinations
+where continent is not null
+group by continent
+order by total_vaccinated
+
+
+-- create a view of above query for future visualization
+create view fullyvaccinatedpercontinent as
+select continent, sum(people_fully_vaccinated)as total_vaccinated
+from covid_vaccinations
+where continent is not null
+group by continent
+order by total_vaccinated
+
+
+-- filter out the rolling count people fully vaccinated
+select vac.continent,vac.location, vac.date, dea.population, vac.people_fully_vaccinated, sum(vac.people_fully_vaccinated)
+over (partition by vac.location order by vac.location, vac.date) as rolling_peoplefullyvaccinated 
+from covid_vaccinations as vac
+join covid_death as dea
+on vac.location=dea.location
+and cast(vac.date as date)=cast(dea.date as date)
+where vac.continent is not null
+order by 2,3
+
+
+-- find percentage of population fully vaccinated
+-- use cte 
+with fullyvacpop (continent, location, date, population,people_fully_vaccinated,rolling_peoplefullyvaccinated)
+as
+(
+select vac.continent,vac.location, vac.date, dea.population, vac.people_fully_vaccinated, sum(vac.people_fully_vaccinated)
+over (partition by vac.location order by vac.location, vac.date) as rolling_peoplefullyvaccinated
+from covid_vaccinations as vac
+join covid_death as dea
+on vac.location=dea.location
+and cast(vac.date as date)=cast(dea.date as date)
+where vac.continent is not null
+order by 2,3
+
+)
+select *, rolling_peoplefullyvaccinated/population*100 as pop_percentage_fullyvac
+from fullyvacpop
+
+--create view of above query
+
+create view fullyvacpop as
+select vac.continent,vac.location, vac.date, dea.population, vac.people_fully_vaccinated, sum(vac.people_fully_vaccinated)
+over (partition by vac.location order by vac.location, vac.date) as rolling_peoplefullyvaccinated 
+from covid_vaccinations as vac
+join covid_death as dea
+on vac.location=dea.location
+and cast(vac.date as date)=cast(dea.date as date)
+where vac.continent is not null
+order by 2,3
+
+
+select * from fullyvacpop
+
+
