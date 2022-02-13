@@ -1,0 +1,28 @@
+--The scripts contained in this file are used to generate tables to be used in Tableau visualization
+
+
+select * from covid_death
+
+
+-- this  query generates the total new cases, totalnewdeaths and the ratio of the two for thw whole world
+select sum(new_cases) as totalnewcases, sum(new_deaths)as totalnewdeaths, 
+sum(new_deaths)/sum(new_cases)*100 as Deathpercentage from covid_death
+where new_cases!=0
+
+-- Filter out total death count per Continent
+select continent, sum(new_deaths) as totaldeath from covid_death
+where continent is not null
+group by continent
+
+
+---
+select location, population, max(total_cases) as Highestinfectioncount, max(total_cases/population)*100 as percentpopulationinfected
+from covid_death
+group by location,population
+order by percentpopulationinfected desc
+
+select location, population,date, max(total_cases) as Highestinfectioncount, max(total_cases/population)*100 as percentpopulationinfected
+from covid_death
+group by location,population,date
+order by percentpopulationinfected desc
+
